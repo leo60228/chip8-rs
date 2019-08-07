@@ -1,4 +1,20 @@
 use crate::types::*;
+use bitvec::prelude::*;
+use bitvec::prelude::Bits;
+
+fn bcd(n: u8) -> [u8; 3] {
+    fn bcd_inner(i: u8, n: u8, xs: &mut [u8; 3]) {
+        if n >= 10 {
+            bcd_inner(i + 1, n / 10, xs);
+        }
+
+        xs[i as usize] = n % 10;
+    }
+
+    let mut xs = [0u8; 3];
+    bcd_inner(0, n, &mut xs);
+    xs
+}
 
 #[derive(Debug)]
 pub enum Instruction {
@@ -49,16 +65,46 @@ impl Instruction {
         match self {
             SetImm(reg, n) => state.registers[*reg] = *n,
             SetAddr(addr) => state.i_reg = *addr,
-            Draw(_x, _y, _h) => {}, // TODO: graphics
+            Draw(x, y, h) => {
+                let x = usize::from(state.registers[*x]);
+                let y = usize::from(state.registers[*y]);
+                let h: usize = (*h).into();
+
+                let sprite_begin: usize = u16::from(state.i_reg).into();
+                let sprite_end = sprite_begin + h;
+                let sprite = &state.memory[sprite_begin..sprite_end];
+
+                let gfx_bits = (&mut state.bit_gfx[..]).as_mut_bitslice::<BigEndian>();
+
+                let mut collision = false;
+
+                for (yi, row) in sprite.into_iter().enumerate() {
+                    for (xi, bit) in row.as_bitslice::<BigEndian>().into_iter().enumerate() {
+                        if bit {
+                            let idx = ((x + xi) % 64) + ((y + yi) % 32) * 64;
+                            let old = gfx_bits.get(idx).unwrap();
+
+                            if old {
+                                collision = true;
+                                gfx_bits.set(idx, false);
+                            } else {
+                                gfx_bits.set(idx, true);
+                            }
+                        }
+                    }
+                }
+
+                state.registers[Register::VF] = if collision { 1 } else { 0 };
+            },
             Call(addr) => {
                 state.call_stack.push(state.pc);
                 state.pc = *addr;
             },
             BCD(reg) => {
-                let bcd = bcd::Bcd::<u32>(state.registers[*reg].into());
-                let hundreds = bcd.digit(2);
-                let tens = bcd.digit(1);
-                let ones = bcd.digit(0);
+                let bcd = bcd(state.registers[*reg]);
+                let hundreds = bcd[2];
+                let tens = bcd[1];
+                let ones = bcd[0];
                 state.memory[state.i_reg.0 as usize + 0] = hundreds;
                 state.memory[state.i_reg.0 as usize + 1] = tens;
                 state.memory[state.i_reg.0 as usize + 2] = ones;
@@ -96,8 +142,16 @@ impl Instruction {
             },
             Goto(addr) => state.pc = *addr,
             Rand(reg, mask) => state.registers[*reg] = rand::random::<u8>() & mask,
-            SkipUnpressed(_reg) => state.pc += 2.into(), // TODO: input
-            SkipPressed(_reg) => {}, // TODO: input
+            SkipUnpressed(reg) => {
+                let button = Button::n(state.registers[*reg]).unwrap();
+
+                if !state.buttons[button] { state.pc += 2.into() }
+            },
+            SkipPressed(reg) => {
+                let button = Button::n(state.registers[*reg]).unwrap();
+
+                if state.buttons[button] { state.pc += 2.into() }
+            },
             AndReg(r1, r2) => state.registers[*r1] &= state.registers[*r2],
             OrReg(r1, r2) => state.registers[*r1] |= state.registers[*r2],
             XorReg(r1, r2) => state.registers[*r1] ^= state.registers[*r2],
@@ -120,17 +174,17 @@ impl Instruction {
             SubReg(r1, r2) => {
                 let (val, carry) = state.registers[*r1].overflowing_sub(state.registers[*r2]);
                 state.registers[*r1] = val;
-                state.registers[Register::VF] = if carry { 1 } else { 0 };
+                state.registers[Register::VF] = if !carry { 1 } else { 0 };
             },
             RevSubReg(r1, r2) => {
                 let (val, carry) = state.registers[*r2].overflowing_sub(state.registers[*r1]);
                 state.registers[*r1] = val;
-                state.registers[Register::VF] = if carry { 1 } else { 0 };
+                state.registers[Register::VF] = if !carry { 1 } else { 0 };
             },
             IndexedJump(offset) => state.pc = Address::from(state.registers[Register::V0] as u16) + *offset,
             WaitPress(_reg) => state.pc -= 2.into(), // TODO: input
             AddAddr(reg) => state.i_reg += (state.registers[*reg] as u16).into(),
-            ClearDisplay => {}, // TODO: graphics
+            ClearDisplay => state.bit_gfx = [0u8; 256],
             RcaCall(_) => panic!("RCA calls not supported!"),
         }
     }

@@ -5,6 +5,9 @@ use std::io::prelude::*;
 use std::time::{Instant, Duration};
 use rodio::Sink;
 use rodio::source::SineWave;
+use minifb::Window;
+use minifb::WindowOptions;
+use bitvec::prelude::*;
 
 fn main() {
     let mut state = chip8::types::State::default();
@@ -42,6 +45,11 @@ fn main() {
         eprintln!("Couldn't initialize audio!");
     }
 
+    let mut window = Window::new("chip8-rs", 64, 32, WindowOptions {
+        scale: minifb::Scale::X16,
+        ..Default::default()
+    }).expect("Couldn't initialize window!");
+
     loop {
         let instr_start: u16 = state.pc.into();
         let instr_end: u16 = instr_start + 1;
@@ -63,6 +71,24 @@ fn main() {
                 sink.play();
             } else {
                 sink.pause();
+            }
+        }
+
+        for (i, e) in (&state.bit_gfx[..]).as_bitslice::<BigEndian>().iter().enumerate() {
+            if e {
+                state.pix_gfx[i] = 0xFFFFFFFF;
+            } else {
+                state.pix_gfx[i] = 0;
+            }
+        }
+
+        window.update_with_buffer(&state.pix_gfx[..]).expect("Couldn't update window!");
+
+        for button in &chip8::types::BUTTON_KEYS {
+            if window.is_key_down(*button) {
+                state.buttons[chip8::types::Button::from_key(*button).unwrap()] = true;
+            } else {
+                state.buttons[chip8::types::Button::from_key(*button).unwrap()] = false;
             }
         }
     }
