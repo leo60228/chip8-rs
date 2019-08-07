@@ -3,6 +3,8 @@ use std::env;
 use std::usize;
 use std::io::prelude::*;
 use std::time::{Instant, Duration};
+use rodio::Sink;
+use rodio::source::SineWave;
 
 fn main() {
     let mut state = chip8::types::State::default();
@@ -19,13 +21,21 @@ fn main() {
 
     let mut time = Instant::now();
 
+    let device = rodio::default_output_device().expect("Can't get speakers!");
+
+    let sink = Sink::new(&device);
+    sink.set_volume(0.5);
+    sink.pause();
+
+    let sine = SineWave::new(440);
+    sink.append(sine);
+
     loop {
         let instr_start: u16 = state.pc.into();
         let instr_end: u16 = instr_start + 1;
 
         let current_instr = chip8::parser::instr(&state.memory[(instr_start as usize)..=(instr_end as usize)])
             .expect("invalid instruction at pc").1;
-        println!("{:X?}", current_instr);
 
         current_instr.eval(&mut state);
 
@@ -33,7 +43,13 @@ fn main() {
         if now - time > Duration::from_millis(1000 / 60) {
             time = now;
             if state.timer > 0 { state.timer -= 1; }
-            println!("timer: {}", state.timer);
+            if state.sound_timer > 0 { state.sound_timer -= 1; }
+        }
+
+        if state.sound_timer > 0 {
+            sink.play();
+        } else {
+            sink.pause();
         }
     }
 }
