@@ -186,14 +186,14 @@ impl Instruction {
             OrReg(r1, r2) => state.registers[*r1] |= state.registers[*r2],
             XorReg(r1, r2) => state.registers[*r1] ^= state.registers[*r2],
             LShiftReg(r1, r2) => {
-                let lsb = state.registers[*r2] & (!1);
-                state.registers[*r1] = state.registers[*r2] << 1;
-                state.registers[Register::VF] = lsb;
+                let msb = state.registers[*r1] >> 7;
+                state.registers[*r2] = state.registers[*r1] << 1;
+                state.registers[Register::VF] = msb;
             }
             RShiftReg(r1, r2) => {
-                let msb = state.registers[*r2] << 7;
-                state.registers[*r1] = state.registers[*r2] >> 1;
-                state.registers[Register::VF] = msb;
+                let lsb = state.registers[*r1] & 1;
+                state.registers[*r2] = state.registers[*r1] >> 1;
+                state.registers[Register::VF] = lsb;
             }
             SetReg(r1, r2) => state.registers[*r1] = state.registers[*r2],
             AddReg(r1, r2) => {
