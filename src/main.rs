@@ -21,14 +21,26 @@ fn main() {
 
     let mut time = Instant::now();
 
-    let device = rodio::default_output_device().expect("Can't get speakers!");
+    let device = rodio::default_output_device();
 
-    let sink = Sink::new(&device);
-    sink.set_volume(0.5);
-    sink.pause();
+    let sink = device.as_ref().and_then(|device| {
+        if device.supported_output_formats().ok().map(Iterator::count).unwrap_or(0) <= 0 {
+            None
+        } else {
+            let sink = Sink::new(device);
+            sink.set_volume(0.5);
+            sink.pause();
 
-    let sine = SineWave::new(440);
-    sink.append(sine);
+            let sine = SineWave::new(440);
+            sink.append(sine);
+
+            Some(sink)
+        }
+    });
+
+    if device.is_none() {
+        eprintln!("Couldn't initialize audio!");
+    }
 
     loop {
         let instr_start: u16 = state.pc.into();
@@ -46,10 +58,12 @@ fn main() {
             if state.sound_timer > 0 { state.sound_timer -= 1; }
         }
 
-        if state.sound_timer > 0 {
-            sink.play();
-        } else {
-            sink.pause();
+        if let Some(sink) = &sink {
+            if state.sound_timer > 0 {
+                sink.play();
+            } else {
+                sink.pause();
+            }
         }
     }
 }
