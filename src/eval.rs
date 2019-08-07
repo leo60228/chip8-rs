@@ -182,7 +182,16 @@ impl Instruction {
                 state.registers[Register::VF] = if !carry { 1 } else { 0 };
             },
             IndexedJump(offset) => state.pc = Address::from(state.registers[Register::V0] as u16) + *offset,
-            WaitPress(_reg) => state.pc -= 2.into(), // TODO: input
+            WaitPress(reg) => {
+                for (button, pressed) in &state.buttons {
+                    if *pressed {
+                        state.registers[*reg] = button as u8;
+                        return;
+                    }
+                }
+
+                state.pc -= 2.into();
+            },
             AddAddr(reg) => state.i_reg += (state.registers[*reg] as u16).into(),
             ClearDisplay => state.bit_gfx = [0u8; 256],
             RcaCall(_) => panic!("RCA calls not supported!"),
