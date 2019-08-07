@@ -1,5 +1,5 @@
+use derive_more::{Add, AddAssign, From, Into, Sub, SubAssign};
 use enum_map::EnumMap;
-use derive_more::{From, Into, Add, AddAssign, Sub, SubAssign};
 use enumn::N;
 
 pub(crate) type Bits<'a> = (&'a [u8], usize);
@@ -10,12 +10,7 @@ pub struct Address(pub u16);
 pub const BUTTON_KEYS: [minifb::Key; 16] = {
     use minifb::Key::*;
 
-    [
-        Key1, Key2, Key3, Key4,
-        Q, W, E, R,
-        A, S, D, F,
-        Z, X, C, V,
-    ]
+    [Key1, Key2, Key3, Key4, Q, W, E, R, A, S, D, F, Z, X, C, V]
 };
 
 #[repr(u8)]
